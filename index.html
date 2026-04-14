@@ -728,8 +728,8 @@ async function deleteCustomCat(id){
 }
 
 // ── FILTERS ───────────────────────────────────────────────────────────────────
-function setCatFilter(f){ catFilter=f; renderBoard(); renderFilters(); }
-function setWhoFilter(f){ whoFilter=f; renderBoard(); renderFilters(); }
+function setCatFilter(f){ catFilter = (catFilter===f && f!=='all') ? 'all' : f; renderBoard(); renderFilters(); }
+function setWhoFilter(f){ whoFilter = (whoFilter===f && f!=='all') ? 'all' : f; renderBoard(); renderFilters(); }
 function setMobileCol(c){ mobileCol=c; renderColTabs(); renderBoard(); }
 
 function applyFilters(list){
