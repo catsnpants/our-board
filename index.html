@@ -18,6 +18,7 @@
   --cat-sell-bg:#e6f5ee;  --cat-sell-fg:#1f6b4a;
   --cat-sewing-bg:#f5ede6;--cat-sewing-fg:#8a4e2d;
   --cat-errands-bg:#e8f4fb;--cat-errands-fg:#1a5f7a;
+  --cat-grocery-bg:#fef9e6;--cat-grocery-fg:#7a6010;
   --cat-other-bg:#efefef; --cat-other-fg:#555;
 }
 @media(prefers-color-scheme:dark){:root{
@@ -31,6 +32,7 @@
   --cat-sell-bg:#1a2e24;   --cat-sell-fg:#6ac49a;
   --cat-sewing-bg:#301a10; --cat-sewing-fg:#d4956a;
   --cat-errands-bg:#0f2a38;--cat-errands-fg:#6ab8d8;
+  --cat-grocery-bg:#2e2a10;--cat-grocery-fg:#c8a84a;
   --cat-other-bg:#2a2521;  --cat-other-fg:#999;
 }}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -189,6 +191,22 @@ header{padding:1.25rem 1.5rem 1rem;border-bottom:1px solid var(--border);display
 /* RESET CONFIG LINK */
 .reset-cfg{position:fixed;bottom:0.75rem;left:1rem;font-size:10px;color:var(--text-3);cursor:pointer;background:none;border:none;font-family:'DM Mono',monospace;z-index:80;}
 .reset-cfg:hover{color:var(--accent);}
+/* MANAGE CATEGORIES MODAL */
+.cat-manage-list{margin-bottom:12px;}
+.cat-manage-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);}
+.cat-manage-row:last-child{border-bottom:none;}
+.cat-swatch{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.cat-manage-label{flex:1;font-size:12px;color:var(--text);}
+.cat-manage-built{font-size:10px;color:var(--text-3);font-style:italic;}
+.cat-delete-btn{background:none;border:none;cursor:pointer;color:var(--text-3);font-size:16px;padding:0 4px;line-height:1;transition:color 0.1s;}
+.cat-delete-btn:hover{color:#c04a3a;}
+.cat-add-row{display:flex;gap:8px;margin-top:4px;}
+.cat-add-row input{flex:1;font-family:'DM Mono',monospace;font-size:13px;padding:8px 10px;background:var(--card);border:1px solid var(--border-mid);border-radius:6px;color:var(--text);outline:none;}
+.cat-add-row input:focus{border-color:var(--accent);}
+.cat-add-btn{font-family:'DM Mono',monospace;font-size:12px;padding:8px 14px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;white-space:nowrap;}
+.cat-add-btn:hover{opacity:0.85;}
+.manage-cats-link{font-size:10px;color:var(--text-3);cursor:pointer;background:none;border:none;font-family:'DM Mono',monospace;text-decoration:underline;padding:0;margin-top:6px;display:inline-block;}
+.manage-cats-link:hover{color:var(--accent);}
 </style>
 </head>
 <body>
@@ -285,6 +303,23 @@ header{padding:1.25rem 1.5rem 1rem;border-bottom:1px solid var(--border);display
       <button class="btn-secondary" onclick="closeModal()">cancel</button>
       <button class="btn-delete" id="btn-delete" onclick="deleteTask()" style="display:none;">delete</button>
     </div>
+    <button class="manage-cats-link" onclick="closeModal();openCatsModal()">manage categories</button>
+  </div>
+</div>
+
+<!-- MANAGE CATEGORIES MODAL -->
+<div class="modal-backdrop" id="cats-backdrop" onclick="handleCatsBackdropClick(event)">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">categories</div>
+    <div class="cat-manage-list" id="cat-manage-list"></div>
+    <div class="cat-add-row">
+      <input id="new-cat-input" placeholder="new category name..." maxlength="30" onkeydown="if(event.key==='Enter') addCustomCat()">
+      <button class="cat-add-btn" onclick="addCustomCat()">add</button>
+    </div>
+    <div class="modal-actions" style="margin-top:1rem;">
+      <button class="btn-secondary" onclick="closeCatsModal()">done</button>
+    </div>
   </div>
 </div>
 
@@ -300,15 +335,36 @@ const COLS = [
   {id:'done',   label:'done',       dot:'#5a9e6a'},
 ];
 
-const CATS = {
+const CATS_BUILTIN = {
   house:   {label:'house',   style:'background:var(--cat-house-bg);color:var(--cat-house-fg)'},
   yard:    {label:'yard',    style:'background:var(--cat-yard-bg);color:var(--cat-yard-fg)'},
   art:     {label:'art',     style:'background:var(--cat-art-bg);color:var(--cat-art-fg)'},
   sell:    {label:'sell',    style:'background:var(--cat-sell-bg);color:var(--cat-sell-fg)'},
   sewing:  {label:'sewing',  style:'background:var(--cat-sewing-bg);color:var(--cat-sewing-fg)'},
   errands: {label:'errands', style:'background:var(--cat-errands-bg);color:var(--cat-errands-fg)'},
+  grocery: {label:'grocery', style:'background:var(--cat-grocery-bg);color:var(--cat-grocery-fg)'},
   other:   {label:'other',   style:'background:var(--cat-other-bg);color:var(--cat-other-fg)'},
 };
+
+// Custom cats loaded from Supabase — merged with builtins at runtime
+let customCats = {}; // id -> {label, style}
+
+function getAllCats(){
+  return {...CATS_BUILTIN, ...customCats};
+}
+
+// Palette for custom categories — cycles through these
+const CUSTOM_PALETTES = [
+  'background:#fce8f0;color:#8a2d58',
+  'background:#e8fce8;color:#1a5c2a',
+  'background:#fce8e8;color:#8a2d2d',
+  'background:#e8f0fc;color:#2d3d8a',
+  'background:#fcf0e8;color:#8a5a2d',
+  'background:#f0e8fc;color:#5a2d8a',
+  'background:#e8fcf8;color:#1a5c4a',
+  'background:#fcfce8;color:#6b6010',
+];
+let paletteIdx = 0;
 
 const WHO_FILTERS = [
   {id:'all',  label:'everyone',cls:''},
@@ -358,6 +414,7 @@ let editId      = null;
 let dragId      = null;
 let realtimeSub = null;
 let logSub      = null;
+let catsSub     = null;
 
 // ── CONFIG ───────────────────────────────────────────────────────────────────
 function loadConfig(){
@@ -404,6 +461,7 @@ async function initSupabase(cfg){
   // Load data
   await fetchTasks();
   await fetchLog();
+  await fetchCustomCats();
 
   // Seed if empty
   if(tasks.length === 0 && !localStorage.getItem(SEEDED_KEY)){
@@ -415,6 +473,10 @@ async function initSupabase(cfg){
   }
 
   // Realtime subscriptions
+  catsSub = SB.channel('cats-channel')
+    .on('postgres_changes',{event:'*',schema:'public',table:'custom_cats'}, () => fetchCustomCats())
+    .subscribe();
+
   realtimeSub = SB.channel('tasks-channel')
     .on('postgres_changes',{event:'*',schema:'public',table:'tasks'}, () => fetchTasks())
     .subscribe();
@@ -455,6 +517,26 @@ async function fetchTasks(){
 async function fetchLog(){
   const {data, error} = await SB.from('activity_log').select('*').order('created_at',{ascending:false}).limit(30);
   if(!error){ logItems = data || []; renderLog(); }
+}
+
+async function fetchCustomCats(){
+  const {data, error} = await SB.from('custom_cats').select('*').order('created_at',{ascending:true});
+  if(!error){
+    customCats = {};
+    (data||[]).forEach(c => {
+      customCats[c.id] = {label: c.label, style: c.style, dbId: c.id};
+    });
+    populateCatSelect();
+    renderFilters();
+    renderBoard();
+  }
+}
+
+function populateCatSelect(){
+  const cats = getAllCats();
+  const current = document.getElementById('f-cat').value;
+  document.getElementById('f-cat').innerHTML = Object.entries(cats)
+    .map(([id,v])=>`<option value="${id}" ${id===current?'selected':''}>${v.label}</option>`).join('');
 }
 
 // ── SYNC STATUS ───────────────────────────────────────────────────────────────
@@ -589,6 +671,62 @@ async function onDrop(e,colId){
   document.querySelectorAll('.col.drag-over').forEach(el=>el.classList.remove('drag-over'));
 }
 
+// ── MANAGE CATEGORIES ─────────────────────────────────────────────────────────
+function openCatsModal(){
+  renderCatsModal();
+  document.getElementById('cats-backdrop').classList.add('open');
+  setTimeout(()=>document.getElementById('new-cat-input').focus(), 80);
+}
+
+function closeCatsModal(){
+  document.getElementById('cats-backdrop').classList.remove('open');
+}
+
+function handleCatsBackdropClick(e){
+  if(e.target===document.getElementById('cats-backdrop')) closeCatsModal();
+}
+
+function renderCatsModal(){
+  const cats = getAllCats();
+  document.getElementById('cat-manage-list').innerHTML = Object.entries(cats).map(([id,v])=>{
+    const isBuiltin = !!CATS_BUILTIN[id];
+    const swatchColor = v.style.match(/color:([^;]+)/)?.[1] || '#888';
+    return `<div class="cat-manage-row">
+      <span class="cat-swatch" style="background:${swatchColor}"></span>
+      <span class="cat-manage-label">${escHtml(v.label)}</span>
+      ${isBuiltin
+        ? '<span class="cat-manage-built">built-in</span>'
+        : `<button class="cat-delete-btn" onclick="deleteCustomCat('${id}')" title="delete">×</button>`}
+    </div>`;
+  }).join('');
+}
+
+async function addCustomCat(){
+  const input = document.getElementById('new-cat-input');
+  const label = input.value.trim().toLowerCase();
+  if(!label) return;
+  const cats = getAllCats();
+  if(Object.values(cats).some(c=>c.label===label)){
+    input.style.borderColor='#c04a3a';
+    setTimeout(()=>input.style.borderColor='',1200);
+    return;
+  }
+  const style = CUSTOM_PALETTES[paletteIdx % CUSTOM_PALETTES.length];
+  paletteIdx++;
+  await SB.from('custom_cats').insert({label, style, created_at: new Date().toISOString()});
+  input.value = '';
+  // fetchCustomCats will fire via realtime, but also call directly for responsiveness
+  await fetchCustomCats();
+  renderCatsModal();
+}
+
+async function deleteCustomCat(id){
+  if(!confirm(`Delete the "${customCats[id]?.label}" category? Tasks using it will show as "other".`)) return;
+  await SB.from('custom_cats').delete().eq('id', id);
+  await fetchCustomCats();
+  renderCatsModal();
+}
+
 // ── FILTERS ───────────────────────────────────────────────────────────────────
 function setCatFilter(f){ catFilter=f; renderBoard(); renderFilters(); }
 function setWhoFilter(f){ whoFilter=f; renderBoard(); renderFilters(); }
@@ -612,7 +750,8 @@ function renderFilters(){
   document.getElementById('who-filters').innerHTML = WHO_FILTERS.map(f=>
     `<button class="pill ${f.cls} ${whoFilter===f.id?'active':''}" onclick="setWhoFilter('${f.id}')">${f.label}</button>`
   ).join('');
-  const catOpts=[{id:'all',label:'all'},...Object.entries(CATS).map(([id,v])=>({id,label:v.label}))];
+  const cats = getAllCats();
+  const catOpts=[{id:'all',label:'all'},...Object.entries(cats).map(([id,v])=>({id,label:v.label}))];
   document.getElementById('cat-filters').innerHTML = catOpts.map(f=>
     `<button class="pill ${catFilter===f.id?'active':''}" onclick="setCatFilter('${f.id}')">${f.label}</button>`
   ).join('');
@@ -649,7 +788,7 @@ function renderBoard(){
       </div>
       ${cards.length===0 ? '<div class="empty-col">nothing here yet</div>' : ''}
       ${cards.map(t=>{
-        const c = CATS[t.cat]||CATS.other;
+        const c = getAllCats()[t.cat] || CATS_BUILTIN.other;
         return `<div class="card ${t.col==='done'?'is-done':''}"
             data-id="${t.id}"
             draggable="true"
@@ -691,10 +830,9 @@ function escHtml(s){
 }
 
 // ── BOOT ──────────────────────────────────────────────────────────────────────
-document.getElementById('f-cat').innerHTML = Object.entries(CATS)
-  .map(([id,v])=>`<option value="${id}">${v.label}</option>`).join('');
+populateCatSelect();
 
-document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeModal(); closeCatsModal(); } });
 window.addEventListener('resize', ()=>{ renderColTabs(); renderBoard(); });
 
 const cfg = loadConfig();
@@ -714,7 +852,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   box.className = 'setup-box';
   box.style.marginTop = '1rem';
   box.innerHTML = `<h2>One-time SQL setup</h2>
-  <p style="font-size:11px;color:var(--text-2);line-height:1.8;margin-bottom:12px;">In your Supabase project, go to the <strong>SQL Editor</strong> and run this once to create the two tables:</p>
+  <p style="font-size:11px;color:var(--text-2);line-height:1.8;margin-bottom:12px;">In your Supabase project, go to the <strong>SQL Editor</strong> and run this once to create the tables:</p>
   <pre style="font-size:10px;background:var(--bg);border:1px solid var(--border-mid);border-radius:6px;padding:12px;overflow-x:auto;line-height:1.6;color:var(--text-2)">create table tasks (
   id bigint generated always as identity primary key,
   text text not null,
@@ -731,13 +869,23 @@ create table activity_log (
   created_at timestamptz default now()
 );
 
+create table custom_cats (
+  id bigint generated always as identity primary key,
+  label text not null,
+  style text not null,
+  created_at timestamptz default now()
+);
+
 alter table tasks enable row level security;
 alter table activity_log enable row level security;
+alter table custom_cats enable row level security;
 
 create policy "public read tasks" on tasks for select using (true);
 create policy "public write tasks" on tasks for all using (true);
 create policy "public read log" on activity_log for select using (true);
-create policy "public write log" on activity_log for all using (true);</pre>
+create policy "public write log" on activity_log for all using (true);
+create policy "public read cats" on custom_cats for select using (true);
+create policy "public write cats" on custom_cats for all using (true);</pre>
   <p style="font-size:11px;color:var(--text-3);line-height:1.7;margin-top:10px;">After running the SQL, paste your credentials above and click connect.</p>`;
   document.getElementById('setup-screen').appendChild(box);
 });
