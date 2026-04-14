@@ -839,8 +839,13 @@ const cfg = loadConfig();
 if(cfg){
   initSupabase(cfg);
 } else {
-  document.getElementById('loading').classList.add('hidden');
-  document.getElementById('setup-screen').classList.add('visible');
+  // Credentials hardcoded — skip setup screen
+  const hardcoded = {
+    url: 'https://migogwlekbnekhrzzqrr.supabase.co',
+    key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1pZ29nd2xla2JuZWtocnp6cXJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxOTQ1NTUsImV4cCI6MjA5MTc3MDU1NX0.ARZV2vvcl8OuYZTvCWmWnHCMXG_ePWnsFaBkNlc9cq0'
+  };
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(hardcoded));
+  initSupabase(hardcoded);
 }
 </script>
 
